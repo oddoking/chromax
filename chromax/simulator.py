@@ -574,11 +574,21 @@ class Simulator:
         if environments is None:
             num_environments = num_environments if num_environments is not None else 1
             environments = self.create_environments(num_environments)
-
-        w = jnp.mean(environments)
         GEBV = self.GEBV_model(population)
+        self.random_key, split_key = jax.random.split(self.random_key)
+        GxE_var = self.GxE_model.var  # Assuming this is how you get the variance
+        env_effects = []
+        for _ in range(num_environments):
+            env_effect = jax.random.normal(split_key, GEBV.shape) * jnp.sqrt(GxE_var)
+            env_effects.append(env_effect)
+        env_effects = jnp.stack(env_effects, axis=0)
+
+        # Calculate the average environmental effect for each individual
+        avg_env_effect = jnp.mean(env_effects, axis=0)
+        w = jnp.mean(environments)
+
         GxE = self.GxE_model(population)
-        phenotype = GEBV + w * GxE
+        phenotype = GEBV + avg_env_effect
         if not raw_array:
             phenotype = pd.DataFrame(phenotype, columns=self.trait_names)
         return phenotype
