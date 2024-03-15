@@ -578,7 +578,7 @@ class Simulator:
         self.random_key, split_key = jax.random.split(self.random_key)
         GxE_var = self.GxE_model.var  # Assuming this is how you get the variance
         env_effects = []
-        for _ in range(num_environments):
+        for _ in range(len(environments)):
             env_effect = jax.random.normal(split_key, GEBV.shape) * jnp.sqrt(GxE_var)
             env_effects.append(env_effect)
         env_effects = jnp.stack(env_effects, axis=0)
