@@ -118,8 +118,8 @@ class Simulator:
         env_effects = jax.random.normal(
             split_key, shape=(self.n_markers, len(self.trait_names))
         )
-        target_vars = (1 - h2) / h2 * self.GEBV_model.var
-        env_effects *= np.sqrt(2 * target_vars / self.n_markers)
+        self.target_vars = (1 - h2) / h2 * self.GEBV_model.var
+        env_effects *= np.sqrt(2 * self.target_vars / self.n_markers)
         self.GxE_model = TraitModel(
             marker_effects=env_effects, offset=1, device=self.device
         )
@@ -576,7 +576,8 @@ class Simulator:
             environments = self.create_environments(num_environments)
         GEBV = self.GEBV_model(population)
 
-        GxE_var = self.GxE_model.var  # Assuming this is how you get the variance
+        #GxE_var = self.GxE_model.var  # Assuming this is how you get the variance
+        GxE_var = self.target_vars
         env_effects = []
         for _ in range(len(environments)):
             self.random_key, split_key = jax.random.split(self.random_key)
