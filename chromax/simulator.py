@@ -590,25 +590,25 @@ class Simulator:
             num_environments = num_environments if num_environments is not None else 1
             environments = self.create_environments(num_environments)
         GEBV = self.GEBV_model(population)
+        GEBV_expanded = GEBV.reshape(1, *GEBV.shape)  # Reshape to (1, 3600, 1)
+
         gebv_vars = GEBV.var(axis=0)
         self.target_vars = (1 - self.h2) / self.h2 * gebv_vars
         GxE_var = self.target_vars
         env_effects = []
+
         for _ in range(len(environments)):
             self.random_key, split_key = jax.random.split(self.random_key)
             env_effect = jax.random.normal(split_key, GEBV.shape) * jnp.sqrt(GxE_var)
             env_effects.append(env_effect)
         env_effects = jnp.stack(env_effects, axis=0)
-
+        expended_pheno = GEBV_expanded + env_effects
         # Calculate the average environmental effect for each individual
         avg_env_effect = jnp.mean(env_effects, axis=0)
-        w = jnp.mean(environments)
-
-        GxE = self.GxE_model(population)
         phenotype = GEBV + avg_env_effect
         if not raw_array:
             phenotype = pd.DataFrame(phenotype, columns=self.trait_names)
-        return phenotype
+        return phenotype, expended_pheno
 
     def corrcoef(self, population: Population["n"]) -> Float[Array, "n"]:
         """Computes the correlation coefficient of the population against its centroid.
