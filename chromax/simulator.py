@@ -590,7 +590,8 @@ class Simulator:
             num_environments = num_environments if num_environments is not None else 1
             environments = self.create_environments(num_environments)
         GEBV = self.GEBV_model(population)
-
+        gebv_vars = GEBV.var(axis=0)
+        self.target_vars = (1 - self.h2) / self.h2 * gebv_vars
         GxE_var = self.target_vars
         env_effects = []
         for _ in range(len(environments)):
