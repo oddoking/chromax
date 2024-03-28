@@ -114,12 +114,13 @@ class Simulator:
         if h2 is None:
             h2 = np.full((len(self.trait_names),), 0.5)
         h2 = np.asarray(h2)
+        self.h2= h2
         self.random_key, split_key = jax.random.split(self.random_key)
         env_effects = jax.random.normal(
             split_key, shape=(self.n_markers, len(self.trait_names))
         )
-        self.target_vars = (1 - h2) / h2 * self.GEBV_model.var
-        env_effects *= np.sqrt(2 * self.target_vars / self.n_markers)
+        target_vars = (1 - h2) / h2 * self.GEBV_model.var
+        env_effects *= np.sqrt(2 * target_vars / self.n_markers)
         self.GxE_model = TraitModel(
             marker_effects=env_effects, offset=1, device=self.device
         )
@@ -193,6 +194,20 @@ class Simulator:
         """
         population = np.load(file_name)
         return jax.device_put(population, device=self.device)
+
+    def calcualte_variance(self, population: Population["n"]):
+        """
+         Given a population and qtl, calculate the variance of the environment. Then use it to simulate pheno
+        :param population: population of shape (n, m, d), where
+        n is the number of individual, m is the total number of marker
+        and d is the diploidy of the population
+        :type population: ndarray
+        :return: variance of enviroment.
+        """
+        gebv = self.GEBV_model(population)
+        gebv_vars = gebv.var(axis=0)
+        self.target_vars = (1 - self.h2) / self.h2 * gebv_vars
+        return self.target_vars
 
     def save_population(self, population: Population["n"], file_name: Union[Path, str]):
         """Save a population to file.
@@ -576,7 +591,6 @@ class Simulator:
             environments = self.create_environments(num_environments)
         GEBV = self.GEBV_model(population)
 
-        #GxE_var = self.GxE_model.var  # Assuming this is how you get the variance
         GxE_var = self.target_vars
         env_effects = []
         for _ in range(len(environments)):
