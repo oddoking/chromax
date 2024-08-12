@@ -73,6 +73,7 @@ class Simulator:
         seed: Optional[int] = None,
         device: xc.Device = None,
         backend: Union[str, xc._xla.Client] = None,
+        scaled_gebv_variance = None
     ):
         """Initialization method. See class docstring for information about parameters."""
         self.random_key = None
@@ -107,9 +108,16 @@ class Simulator:
         self.chr_lens = chr_map.groupby(chr_map).count().values
 
         mrk_effects = genetic_map[self.trait_names]
+        if scaled_gebv_variance != None:
+            self.scaled_gebv_variance = scaled_gebv_variance
+        else:
+            self.scaled_gebv_variance = 1
+
         self.GEBV_model = TraitModel(
             marker_effects=mrk_effects.to_numpy(dtype=np.float32), device=self.device
         )
+
+
 
         if h2 is None:
             h2 = np.full((len(self.trait_names),), 0.5)
@@ -512,9 +520,14 @@ class Simulator:
             dtype: float32
         """
         GEBV = self.GEBV_model(population)
+        GEBV_variance = np.var(GEBV, axis=0)
+        var_adj = np.sqrt(self.scaled_gebv_variance / GEBV_variance)
+        GEBV = GEBV * var_adj
+
+
         if not raw_array:
             GEBV = pd.DataFrame(GEBV, columns=self.trait_names)
-        return GEBV
+        return GEBV, var_adj
 
     def create_environments(
         self, num_environments: int
@@ -543,6 +556,8 @@ class Simulator:
         num_environments: Optional[int] = None,
         environments: Optional[np.ndarray] = None,
         raw_array: bool = False,
+        # gebv_change: Optional[float] = None,
+        # genetic_map = None
     ) -> Union[pd.DataFrame, np.ndarray]:
         """Simulates the phenotype of a population.
 
@@ -593,8 +608,14 @@ class Simulator:
         GEBV_expanded = GEBV.reshape(1, *GEBV.shape)  # Reshape to (1, 3600, 1)
 
         gebv_vars = GEBV.var(axis=0)
+        print(f'gebv_vars_old: {gebv_vars}')
+
+        GEBV = GEBV * np.sqrt(self.scaled_gebv_variance/ gebv_vars)
+        gebv_vars = self.scaled_gebv_variance
+
         self.target_vars = (1 - self.h2) / self.h2 * gebv_vars
         GxE_var = self.target_vars
+        print(f'GxE_var: {GxE_var}')
         env_effects = []
 
         for _ in range(len(environments)):
@@ -608,7 +629,8 @@ class Simulator:
         phenotype = GEBV + avg_env_effect
         if not raw_array:
             phenotype = pd.DataFrame(phenotype, columns=self.trait_names)
-        return phenotype, expended_pheno
+        print(f'KKKKGxE_var:{np.var(avg_env_effect)}')
+        return phenotype, expended_pheno, avg_env_effect,gebv_vars
 
     def corrcoef(self, population: Population["n"]) -> Float[Array, "n"]:
         """Computes the correlation coefficient of the population against its centroid.
